@@ -1,79 +1,37 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.Pool;
+
+[RequireComponent(typeof(Rigidbody))]
 
 public class BulletsSpawner : MonoBehaviour
 {
     [SerializeField] private float _bulletSpeed;
     [SerializeField] private float _shootingDelay;
-    [SerializeField] private float _bulletLifetime;
-    [SerializeField] private int _poolCapacity;
-    [SerializeField] private int _maximumPoolSize;
-    [SerializeField] private Bullet _bullet;
-    [SerializeField] private Transform _weaponBarrelPosition;
-    [SerializeField] private Transform _weaponBasePosition;
+    [SerializeField] private GameObject _bulletPrefab;
+    [SerializeField] private Transform _shootingTarget;
 
-    private ObjectPool<Bullet> _bulletsPool;
-
-    private void Awake()
-    {
-        _bulletsPool = new ObjectPool<Bullet>(
-            createFunc: () => Instantiate(_bullet),
-            actionOnGet: (bullet) => AccompanyGetObject(bullet),
-            actionOnRelease: (bullet) => AccompanyReleaseObject(bullet),
-            actionOnDestroy: (bullet) => Destroy(bullet),
-            collectionCheck: true,
-            defaultCapacity: _poolCapacity,
-            maxSize: _maximumPoolSize);
-    }
+    private WaitForSeconds _waitForSeconds;
 
     private void Start()
     {
-        StartCoroutine(bulletSpawn());
+        _waitForSeconds = new WaitForSeconds(_shootingDelay);
+        StartCoroutine(Shoot());
     }
 
-    private void AccompanyGetObject(Bullet bullet)
+    private IEnumerator Shoot()
     {
-        SetBulletPosition(bullet);
-        bullet.InitializeBulletDirection(GetBulletDirection());
-        bullet.InitializeBulletSpeed(_bulletSpeed);
-        bullet.InitializeLifetimeValue(_bulletLifetime);
-
-        bullet.gameObject.SetActive(true);
-        bullet.BulletLifetimeOver += OnBulletLifetimeOver;
-    }
-
-    private void AccompanyReleaseObject(Bullet bullet)
-    {
-        bullet.gameObject.SetActive(false);
-        bullet.BulletLifetimeOver -= OnBulletLifetimeOver;
-    }
-
-    private void SetBulletPosition(Bullet bullet)
-    {
-        Vector3 defaultBulletPosition = _weaponBarrelPosition.position;
-        bullet.transform.position = defaultBulletPosition;
-    }
-
-    private Vector3 GetBulletDirection()
-    {
-        Vector3 bulletDirection = (_weaponBarrelPosition.position - _weaponBasePosition.position).normalized;
-        return bulletDirection;
-    }
-
-    private IEnumerator bulletSpawn()
-    {
-        WaitForSeconds shootingDelaying = new(_shootingDelay);
-
         while (true)
         {
-            _bulletsPool.Get();
-            yield return shootingDelaying;
-        }
-    }
+            Vector3 shootingDirection = (_shootingTarget.position - transform.position).normalized;
+            GameObject newBullet = Instantiate(_bulletPrefab, transform.position + shootingDirection, Quaternion.identity);
 
-    private void OnBulletLifetimeOver(Bullet bullet)
-    {
-        _bulletsPool.Release(bullet);
+            if (newBullet.TryGetComponent(out Rigidbody bulletRigidbody))
+            {
+                bulletRigidbody.transform.up = shootingDirection;
+                bulletRigidbody.velocity = shootingDirection * _bulletSpeed;
+            }
+
+            yield return _waitForSeconds;
+        }
     }
 }
